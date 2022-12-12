@@ -2,6 +2,7 @@ package com.github.aesteve.kafka;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.junit.jupiter.api.Test;
@@ -11,33 +12,16 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.powermock.api.mockito.PowerMockito.mock;
 
-public class LoadSchemasTest {
+public class UseSRClientOutsideSerializerTest extends TestCommon {
 
-    private final static String SCHEMA_DEFINITION = """
-            {
-                "type": "record",
-                "name": "some_record",
-                "fields": [{
-                    "name": "some_field",
-                    "type": "string"
-                }]
-            }
-            """;
-
-    private final static Schema SCHEMA = new Schema.Parser().parse(SCHEMA_DEFINITION);
-    private final static ParsedSchema PARSED_SCHEMA = new AvroSchema(SCHEMA);
-
-
-    private final static String TOPIC = "some_topic";
+    private final static String TOPIC = "topic_outside_serializer";
 
     @Test
     void withoutPreloadingFirstRegisterMethodGetCalled() throws Exception {
-//        var client = PowerMockito.spy(new MockSchemaRegistryClient());
         var client = new MockSchemaRegistrySpy();
         Map<String, String> config = new HashMap<>();
-        try (var serializer = new KafkaAvroSerializerPreload(client)) {
+        try (var serializer = new KafkaAvroSerializer(client)) {
             config.put("schema.registry.url", "mock://something");
             config.put("auto.register.schemas", "true");
             serializer.configure(config, false);
@@ -54,19 +38,17 @@ public class LoadSchemasTest {
 
     @Test
     void whenPreloadingTheSchemaNoCallIsMade() throws Exception {
-//        var client = PowerMockito.spy(new MockSchemaRegistryClient());
         var client = new MockSchemaRegistrySpy();
         Map<String, String> config = new HashMap<>();
         assertTrue(client.schemaCache.isEmpty());
-        try (var serializer = new KafkaAvroSerializerPreload(client)) {
+        try (var serializer = new KafkaAvroSerializer(client)) {
             config.put("schema.registry.url", "mock://something");
             config.put("auto.register.schemas", "true");
             serializer.configure(config, false);
 
-            serializer.register(PARSED_SCHEMA, TOPIC + "-value");
+            client.register(TOPIC + "-value", PARSED_SCHEMA); // this is where it differs from `PreloadSchemaInSerializerTest`
             assertEquals(1, client.callsToSR.intValue()); // this issued the call to SR
             assertEquals(1, client.schemaCache.size());
-
 
             var record = new GenericData.Record(SCHEMA);
             record.put("some_field", "some_value");
