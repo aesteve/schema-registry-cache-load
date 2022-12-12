@@ -14,6 +14,16 @@ Unfortunately, this can lead to some issues on some cases:
     * degradation of response time / SLAs
     * potentially timeouts in situation where users need to avoid those (DRP) (snowball effects)
     * if there's a massive traffic re-routing (actual disaster recovery) this can lead to an API quota exhaustion (N instances of a web application all acting as standby and accepting traffic at the same time -> rate-limiting)
+* and finally, there's a reasoning consideration:
+  * `producer.send(...)`is, most of the time:
+    * asynchronous
+    * effect-less (no IO involved)
+    * error-less (unless buffer is full, agreed)
+  * but not on the "first call to serializer::serialize" (kinda) which:
+    * performs a synchronous operation
+    * with a side-effect (an IO)
+    * that can potentially fail (timeout, network error, SR error)
+  * which, I agree, can be a bit confusing to reason about, and I can also agree users would like to mitigate it as much as possible (especially in large codebases)
 
 In these cases, it is better to actually communicate with Schema Registry before calling `producer.send(...)`, for example in a readiness probe.
 
@@ -46,7 +56,15 @@ It's mostly an API design discussion around the form it should take:
 
 ## Side Notes
 
-A few notes taken while writing the different implementations, testing
+A few notes taken while writing the different implementations and tests.
+
+### Creating the Subject name
+
+I couldn't find a proper way to use `getSubjectName` from the `KafkaAvroSerializer` to use in the `register` method from either `SchemaRegistryClient` or `KafkaAvroSerializer`, since it is protected.
+I had to manually write `TOPIC + "-value"` which isn't the most elegant thing to write.
+Any suggestions? Any better way?
+
+### `MockSchemaRegistryClient` and the missing parts
 
 Although the implementations are quite simple to expose it is quite tedious to test these (since we need to access private fields in `MockSchemaRegistryClient`), making such fields protected or package private at least could be worth considering.
 Also, having a way to observe the "REST calls that would have been issued to the actual SR" in `MockSchemaRegistryClient` (as done with the [`nbCallsToSR`](src/test/java/com/github/aesteve/kafka/MockSchemaRegistrySpy.java) counter) could be cool.

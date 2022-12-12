@@ -2,6 +2,7 @@ package com.github.aesteve.kafka;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -47,7 +48,7 @@ public class PreloadSchemasInSerializerTest extends TestCommon{
             config.put("auto.register.schemas", "true");
             serializer.configure(config, false);
 
-            serializer.register(TOPIC + "-value", PARSED_SCHEMA); // register BEFORE serializing
+            serializer.register(QualifiedSubject TOPIC + "-value", PARSED_SCHEMA); // register BEFORE serializing
             assertEquals(1, client.callsToSR.intValue()); // this issued the call to SR
             assertEquals(1, client.schemaCache.size());
 
